@@ -1,6 +1,8 @@
 ---
 title: "Wasp TPC"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 date: "2024-05-03"
 ---
 
@@ -25,7 +27,7 @@ Wasp_data$Wasp_proportion <- Wasp_data$Wasp_count / Wasp_data$Total_count
 ```
 
 # Trying a linear model
-```{r}
+```{r, eval=FALSE}
 waspmod1 <- lm(Wasp_proportion ~ G1, data=Wasp_data)
 plot(waspmod1, which=2) #does not meet assumptions
 plot(waspmod1, which=1) 
@@ -36,13 +38,11 @@ plot(waspmod2, which=1)
 ```
 
 
-# GLMs - logistic
+## GLMs - logistic
 ```{r}
 waspglm2 <- glm(Wasp_proportion ~ G1*G0, data=Wasp_data,
                 weights = Total_count, ## giving it the information in the sample size per vial
                 family=binomial(link="logit"))
-summary(waspglm2)
-
 
 waspglm2_noG0 <- glm(Wasp_proportion ~ G1, data=Wasp_data,
                       weights = Total_count,
@@ -64,7 +64,7 @@ AIC(waspglm2, waspglm2_noG0, waspglm2_noint, waspglm2_sepG0)
 
 
 # Model comparison table
-```{r}
+```{r, echo=FALSE}
 data_table_wasp1 <- data.frame(
   Model = c('2a',
             '2b',
@@ -100,7 +100,7 @@ data_table_wasp1 <- data.frame(
 data_table_wasp1
 ```
 
-```{r}
+```{r, include=FALSE}
 write.csv(data_table_wasp1, "wasp_output1.csv", row.names = FALSE)
 ```
 
@@ -115,7 +115,7 @@ waspglm2_poly <- glm(Wasp_proportion ~ G1*poly(G0,2),
 
 
 # Predictions
-```{r}
+```{r, include=FALSE}
 new_data_seq <- expand_grid(G1 = seq(18, 29, by = 0.01),
                             G0 = c(19, 23, 27))
 
@@ -128,7 +128,7 @@ new_data_seq$predictions_poly<- predict(waspglm2_poly, newdata = new_data_seq,ty
 
 
 # Plotting
-```{r}
+```{r, echo=FALSE}
 new_data_seq %>%
   ggplot() +
   geom_point(aes(G1, Wasp_proportion), data = Wasp_data, alpha=0.5) +
@@ -151,7 +151,7 @@ save(waspglm2_noG0, file = 'WaspModel_NoG0') ## save to be loaded into simulatio
 
 
 # Confidence Intervals
-```{r}
+```{r, echo=FALSE}
 wasp_conf_intervals <- confint(waspglm2_sepG0)
 wasp_conf_intervals <- round(wasp_conf_intervals, digits = 2)
 
@@ -181,9 +181,10 @@ wasp_coefficients <- data.frame(Parameter=c('(Intercept)',
                                        '-3.73',
                                        '0.14',
                                        '0.27')) 
+wasp_coefficients
 ```
 
-```{r}
+```{r, include=FALSE}
 write.csv(wasp_coefficients, "Wasp TPC Parameter estimates.csv")
 ```
 

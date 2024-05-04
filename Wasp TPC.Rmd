@@ -182,7 +182,7 @@ waspglm2_poly <- glm(Wasp_proportion ~ G1*poly(G0,2),
 
 ```{r saving models, echo=FALSE}
 # Saving models
-save(waspglm2_poly, file = 'WaspModel') ## save to be loaded into simulation
-save(waspglm2_noG0, file = 'WaspModel_NoG0') ## save to be loaded into simulation
+save(waspglm2_poly, file = 'Wasp TPC models/WaspModel') ## save to be loaded into simulation
+save(waspglm2_noG0, file = 'Wasp TPC models/WaspModel_NoG0') ## save to be loaded into simulation
 ```
 

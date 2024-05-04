@@ -1,0 +1,5 @@
+"Model","Explanatory_variable","Likelihood","AIC"
+"NoEmergence_G0","G0",-255.41,516.81
+"NoEmergence_G1","G1",-306.54,617.08
+"NoEmergence_NoInt","G1+G0",-232.29,472.57
+"NoEmergence_Int","G1*G0",-231.32,474.63

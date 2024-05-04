@@ -28,27 +28,24 @@ Fly_data$G0 <- factor(Fly_data$G0)
 
 NoEmergence_G0 <- glm(Zero_emergence ~ G0, data=Fly_data,
                        family=binomial(link="logit"))
-summary(NoEmergence_G0)
 
 NoEmergence_G1 <- glm(Zero_emergence ~ G1, data=Fly_data,
                        family=binomial(link="logit"))
-summary(NoEmergence_G1)
 
 NoEmergence_NoInt <- glm(Zero_emergence ~ G1+G0, data=Fly_data,
                        family=binomial(link="logit"))
-summary(NoEmergence_NoInt)
-Anova(NoEmergence_NoInt, test="F")
 
 NoEmergence_Int <- glm(Zero_emergence ~ G0*G1, data=Fly_data,
                        family=binomial(link="logit"))
-summary(NoEmergence_Int)
-Anova(NoEmergence_Int, test="F")
 
 AIC(NoEmergence_G0, NoEmergence_G1, NoEmergence_NoInt, NoEmergence_Int)
+
+Anova(NoEmergence_Int, test="F")
+Anova(NoEmergence_NoInt, test="F")
 ```
 
 # Model comparison table
-```{r}
+```{r, echo=FALSE}
 NoEmergence_models <- data.frame(
   Model = c('NoEmergence_G0', 
             'NoEmergence_G1',
@@ -67,11 +64,13 @@ NoEmergence_models <- data.frame(
                 AIC(NoEmergence_NoInt), 
                 AIC(NoEmergence_Int)), digits = 2))
 
+NoEmergence_models
+
 write.csv(NoEmergence_models, "NoEmergence_models.csv", row.names = FALSE)
 ```
 
 # Plotting
-```{r}
+```{r, echo=FALSE}
 predicted_noemergence <- ggpredict(NoEmergence_NoInt, c("G1", "G0"))
 
 ggplot() +
@@ -102,7 +101,6 @@ zero_emergence_model <- glm(Zero_emergence ~ G0_deaths+(G1+G0),
               data=Fly_data,
               family=binomial)
 
-summary(zero_emergence_model)
 Anova(zero_emergence_model,test="F")
 ```
 

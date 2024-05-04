@@ -1,0 +1,64 @@
+---
+title: "Single founder analysis"
+output: html_document
+date: "2024-05-03"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading in packages
+```{r}
+library(tidyverse)
+library(car)
+library(ggeffects)
+```
+
+# Loading in data
+```{r}
+Fly_founders <- read_csv('Fly counts.csv')
+```
+
+# Seperating out G0=27
+```{r}
+Fly_founders_27 <- filter(Fly_founders, G0 == 27) 
+
+founder_27_mod <- lm(G0_deaths ~ G1, data=Fly_founders_27)
+plot(founder_27_mod, which=2) #breaks assumptions
+plot(founder_27_mod, which=1) #breaks assumptions
+
+#need to use GLM to relax assumptions of linearity, normality and homogeneity of variance
+G027_mod1 <- glm(G0_deaths ~ G1, data=Fly_founders_27,
+                 family=binomial(link="logit"))
+# Binomial as either 0 or 1 female deaths (binary choice)
+# Binomial distribution allows for response variables that don't follow a normal distribution 
+
+summary(G027_mod1)
+Anova(G027_mod1, test="F")
+# Significant effect of G1: p=0.000538
+```
+
+
+#Plotting 
+```{r}
+predicted_probs <- ggpredict(G027_mod1, "G1")
+ggplot() +
+    geom_line(data = predicted_probs, aes(x = x, y = predicted), color = "#0072B2") +
+    geom_ribbon(data = predicted_probs, aes(x = x, ymin = conf.low, ymax = conf.high), 
+              fill = "#0072B2", alpha = 0.2) + 
+    geom_point(data = Fly_founders_27, aes(x = G1, y = G0_deaths), 
+               color = "#0072B2", shape = 16, alpha=0.6,
+               position = position_jitter(width = 0.5, height=0.01)) +
+    scale_x_continuous(breaks = seq(19, 27, by = 2)) +
+    labs(x = "G1 Temperature (°C)", 
+         y = "Probability of one female founder death",
+         title = "Probability of one female founder death (G0=27°C)") +
+    theme_bw(base_size=12) +
+    theme(text = element_text(size = 9)) +
+    theme(legend.position = "none")
+```
+
+

@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(rTPC)
 library(tidyverse)
 library(nls.multstart)
+library(bbmle)
 ```
 
 # Loading data
@@ -20,8 +21,9 @@ library(nls.multstart)
 Fly_data <- read_csv('Fly counts.csv')
 ```
 
+```{r Initial analysis, include=FALSE}
 # Initial analysis
-```{r}
+
 start_vals <- get_start_vals(Fly_data$G1, Fly_data$Count, model_name = 'deutsch_2008')
 start_vals
 
@@ -32,9 +34,9 @@ upper_lims <- get_upper_lims(Fly_data$G1, Fly_data$Count, model_name = 'deutsch_
 upper_lims
 ```
 
-## deutsch_2008 is one of the 25 different model formulations that can be accessed as part of rTPC. 
+```{r deutsch_2008, include=FALSE}
+### deutsch_2008 is one of the 25 different model formulations that can be accessed as part of rTPC. 
 
-```{r}
 fit <- nls_multstart(Count~deutsch_2008(temp = G1, 
                                         rmax, topt, ctmax, a),
                      data = Fly_data,
@@ -48,14 +50,15 @@ fit <- nls_multstart(Count~deutsch_2008(temp = G1,
 summary(fit)
 ```
 
-```{r}
+
+```{r deutsch_2008 fit prediction , include=FALSE}
+# Predictions
+
 new_data <- data.frame(G1 = seq(18, 28, by = 0.01))
 new_data$predictions <- predict(fit, newdata = new_data)
 
 new_data$predictions[new_data$predictions < 0] <- 0
-```
 
-```{r}
 ggplot() +
   geom_point(aes(G1 , Count ), data = Fly_data) +
   geom_line(aes(x=G1, y=predictions), data=new_data, col="blue") +
@@ -67,7 +70,7 @@ ggplot() +
 
 
 # Parameter summary
-```{r}
+```{r, echo=FALSE}
 parameter_table <- data.frame(
   Parameter = c('Topt', 
                  'Rmax',
@@ -83,8 +86,10 @@ write.csv(parameter_table, "parameter_output.csv", row.names = FALSE)
 ```
 
 
+
+```{r Fitting each G0 seperately, include=FALSE}
 ### Fitting each G0 seperately 
-```{r}
+
 fit_G019 <- nls_multstart(Count~deutsch_2008(temp = G1, 
                                              rmax, topt, ctmax, a),
                           data = filter( Fly_data, G0 == 19 ),
@@ -96,9 +101,7 @@ fit_G019 <- nls_multstart(Count~deutsch_2008(temp = G1,
                           supp_errors = 'Y')
 
 fit_G019
-```
 
-```{r}
 fit_G023 <- nls_multstart(Count~deutsch_2008(temp = G1, 
                                              rmax, topt, ctmax, a),
                           data = filter( Fly_data, G0 == 23 ),
@@ -110,9 +113,7 @@ fit_G023 <- nls_multstart(Count~deutsch_2008(temp = G1,
                           supp_errors = 'Y')
 
 fit_G023
-```
 
-```{r}
 fit_G027 <- nls_multstart(Count~deutsch_2008(temp = G1, 
                                              rmax, topt, ctmax, a),
                           data = filter( Fly_data, G0 == 27 ),
@@ -124,29 +125,16 @@ fit_G027 <- nls_multstart(Count~deutsch_2008(temp = G1,
                           supp_errors = 'Y')
 
 fit_G027
-```
 
-```{r}
-fit_G027 <- nls_multstart(Count~deutsch_2008(temp = G1, 
-                                             rmax, topt, ctmax, a),
-                          data = filter( Fly_data, G0 == 27 ),
-                          iter = 5000,
-                          start_lower = c(rmax=0, topt=19, ctmax = 27.01,a =1), 
-                          start_upper =  c(rmax=30, topt=27, ctmax = 35,a =5), 
-                          lower =  c(rmax=0,  topt=19,  ctmax = 27.01,a =0),  #  <<<<<< raising ctmax floor to help fitting
-                          upper = upper_lims,
-                          supp_errors = 'Y')
-
-fit_G027
-```
-
-```{r}
 AIC(fit_G019) + AIC(fit_G023) + AIC(fit_G027)
+
+### Fitting each G0 separately has a lower AIC = better model fit to data
 ```
 
-## Fitting each G0 separately has a lower AIC = better model fit to data
 
-```{r}
+```{r deutsch_2008 each G0 seperate predictions, include=FALSE}
+# Predictions
+
 new_data_seq <- data.frame(G1 = seq(18, 28, by = 0.01))
 
 all_3_preds <- c( predict(fit_G019, newdata = new_data_seq),
@@ -170,8 +158,9 @@ data.frame(G1 = rep(new_data_seq$G1, 3) ,
 ```
 
 
+```{r Plotting out parameters, include=FALSE}
 ## Plotting out parameters
-```{r}
+
 bind_rows(
   summary(fit_G019)$coefficients%>% as.data.frame %>% rownames_to_column('Param') %>% mutate(G0 = 19),
   summary(fit_G023)$coefficients%>% as.data.frame %>% rownames_to_column('Param') %>% mutate(G0 = 23),
@@ -187,8 +176,9 @@ bind_rows(
 ```
 
 
+```{r Linear paramater dependence on temp, include=FALSE}
 # Fitting linear dependence of each parameter on temperature
-```{r}
+
 ## Defining custom function
 deutsch_2008_TEMP <- function(temp, 
                               G0,  
@@ -241,8 +231,7 @@ fit_temp
 
 ```
 
-# Defining custom function
-```{r}
+```{r Custom function, include=FALSE}
 ## Defining custom function (this time with just a single CTmax, that doesn't change with G0)
 ### NB not renaming everything...
 
@@ -293,7 +282,9 @@ fit_temp2 <- nls_multstart(Count~deutsch_2008_TEMP(temp = G1,
 fit_temp2
 ```
 
-```{r}
+```{r deutsch_2008 linear temp dependence predictions, include=FALSE}
+# Predictions
+
 new_data_2 <- expand_grid(G1 = seq(18, 27, by = 0.01),
                           G0 = c(19, 23, 27))
 new_data_2$predictions<- predict(fit_temp2, newdata = new_data_2)
@@ -310,9 +301,8 @@ new_data_2 %>%
   facet_wrap(~G0, labeller = label_both)
 ```
 
-```{r}
+```{r Transformation prediction, include=FALSE}
 ## Possibly transformation of counts before data fitting may help, eg Gaussian:
-
 
 new_data_2 %>%
   ggplot() +
@@ -326,22 +316,17 @@ new_data_2 %>%
   scale_y_sqrt()
 ```
 
-```{r}
+```{r Model comparison, include=FALSE}
 AIC(fit, fit_temp2) 
+
+### Custom function has lower AIC = better fit to the data
 ```
 
 
-####
 # Trying different distributions with custom function
 
-# Loading packages
-```{r}
-library(bbmle)
-```
-
-
 # Poisson
-```{r}
+```{r, eval=FALSE}
 set.seed(1)
 
 Poisson_mod = function(topt, rmax, a){
@@ -371,15 +356,13 @@ Poisson_fit <- mle2(Poisson_mod,
                     data = Fly_data)
 
 Poisson_logLik <- logLik(Poisson_fit)
-Poisson_logLik
-AIC(Poisson_fit)
 
 save(Poisson_fit, file = "Fly TPC models/Poisson_fit")
 ```
 
 
 # Negative binomial
-```{r}
+```{r, eval=FALSE}
 set.seed(1)
 
 NB_mod = function(topt, rmax, a, shape){
@@ -402,7 +385,8 @@ NB_mod = function(topt, rmax, a, shape){
 }
 ```
 
-```{r}
+# All G0 together fit
+```{r, eval=FALSE}
 set.seed(1)
 
 NB_AllG0Together_fit <- mle2(NB_mod, 
@@ -421,36 +405,11 @@ NB_AllG0Together_fit <- mle2(NB_mod,
                                            'a' = 1),
                              data = Fly_data)
 
-NB_AllG0Together_fit
-AIC(NB_AllG0Together_fit)
-
 save(NB_AllG0Together_fit, file = "Fly TPC models/NB_AllG0Together_fit")
 ```
 
-```{r}
-Prediction1 <- data.frame( G1 = seq(18, 28, by = 0.01),
-                           Expectation = NA)
-
-NB_AllG0Together_fit@coef
-ctmax = 30
-topt= NB_AllG0Together_fit@coef[1]
-rmax= NB_AllG0Together_fit@coef[2]
-a= NB_AllG0Together_fit@coef[3]
-for(i in 1: nrow(Prediction1)){
-  temp = Prediction1$G1[i]  
-  Prediction1$Expectation[i] <- ifelse(temp< topt,
-                                       rmax * exp(-((temp - topt)/(2 * a))^2), 
-                                       rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
-}
-```
-
-```{r}
-plot(Prediction1)
-```
-
-
 # Fitting linear dependence of each parameter on temperature
-```{r}
+```{r, eval=FALSE}
 set.seed(1)
 
 NB_mod_TEMP = function(toptT, topt19, rmaxT, rmax19, aT, a19, shape){
@@ -498,15 +457,12 @@ NB_Linear_Temp_fit <- mle2(NB_mod_TEMP,
                                          'shape' = 1),
                            data = (Fly_data))
 
-NB_Linear_Temp_fit
-AIC(NB_Linear_Temp_fit)
-
 save(NB_Linear_Temp_fit, file = "Fly TPC models/NB_Linear_Temp_fit")
 ```
 
 
-# All_but_one three way split
-```{r}
+# All G0 seperate
+```{r, eval=FALSE}
 set.seed(1)
 
 NB_AllG0Seperate = function(topt19,topt23,topt27, 
@@ -576,15 +532,12 @@ NB_AllG0Seperate_fit <- mle2(NB_AllG0Seperate,
                                            'a27' = 5),
                              data = Fly_data)
 
-NB_AllG0Seperate_fit
-AIC(NB_AllG0Seperate_fit)
-
 save(NB_AllG0Seperate_fit, file = "Fly TPC models/NB_AllG0Seperate_fit")
 ```
 
 
-# All except Topt
-```{r}
+# All except *Topt*
+```{r, eval=FALSE}
 set.seed(1)
 
 NB_All_Ex_topt = function(topt, 
@@ -640,14 +593,12 @@ NB_All_Ex_topt_fit <- mle2(NB_All_Ex_topt,
                                          'a27' = 1),
                            data = Fly_data)
 
-NB_All_Ex_topt_fit
-
 save(NB_All_Ex_topt_fit, file = "Fly TPC models/NB_All_Ex_topt_fit")
 ```
 
 
-# All except Rmax
-```{r}
+# All except *Rmax*
+```{r, eval=FALSE}
 set.seed(1)
 
 NB_All_Ex_rmax = function(topt19, topt23, topt27,
@@ -703,15 +654,12 @@ NB_All_Ex_rmax_fit <- mle2(NB_All_Ex_rmax,
                                          'a27' = 1),
                            data = Fly_data)
 
-NB_All_Ex_rmax_fit
-AIC(NB_All_Ex_rmax_fit)
-
 save(NB_All_Ex_rmax_fit, file = "Fly TPC models/NB_All_Ex_rmax_fit")
 ```
 
 
-# All except a
-```{r}
+# All except *a*
+```{r, eval=FALSE}
 set.seed(1)
 
 NB_All_Ex_a = function(topt19,topt23,topt27, 
@@ -767,15 +715,11 @@ NB_All_Ex_a_fit <- mle2(NB_All_Ex_a ,
                                       'a'=1),
                         data = Fly_data)
 
-NB_All_Ex_a_fit
-AIC(NB_All_Ex_a_fit)
-
 save(NB_All_Ex_a_fit, file = "Fly TPC models/NB_All_Ex_a_fit")
 ```
 
 
-# Creating table
-```{r}
+```{r # Loading models, echo=FALSE}
 load('Fly TPC models/Poisson_fit')
 load('Fly TPC models/NB_Linear_Temp_fit')
 load('Fly TPC models/NB_AllG0Together_fit')
@@ -785,7 +729,8 @@ load('Fly TPC models/NB_All_Ex_rmax_fit')
 load('Fly TPC models/NB_All_Ex_a_fit')
 ```
 
-```{r}
+# Model comparison table
+```{r, echo=FALSE}
 data_table1 <- data.frame(
   Model = c('1a',
             '1b',
@@ -828,13 +773,13 @@ data_table1 <- data.frame(
 data_table1
 ```
 
-```{r}
+```{r, echo=FALSE}
 write.csv(data_table1, "fly model output1.csv", row.names = FALSE)
 ```
 
 
 # Predictions
-```{r}
+```{r, echo=FALSE}
 load('Fly TPC models/NB_AllG0Seperate_fit')
 
 new_data_seq <- data.frame(G1 = seq(18, 28, by = 0.1))
@@ -885,7 +830,7 @@ Prediction %>%
 
 
 # Confidence intervals
-```{r}
+```{r, echo=FALSE}
 set.seed(1)
 
 NB_mod_CI = function(topt, rmax, a){
@@ -908,7 +853,7 @@ NB_mod_CI = function(topt, rmax, a){
 }
 ```
 
-```{r}
+```{r, echo=FALSE}
 set.seed(1)
 
 data = filter(Fly_data, G0 == 19)
@@ -924,11 +869,9 @@ NB_G019 <- mle2(NB_mod_CI,
                 start = list( 'topt' = 25,
                               'rmax' = 100,
                               'a' = 1) )
-
-NB_G019
 ```
 
-```{r}
+```{r, echo=FALSE}
 conf_intervals_19 <- confint(NB_G019)
 
 new_row_names_19 <- c("topt19", "rmax19", "a19")
@@ -936,7 +879,7 @@ row.names(conf_intervals_19) <- new_row_names_19
 ```
 
 
-```{r}
+```{r, echo=FALSE}
 set.seed(1)
 
 data = filter(Fly_data, G0 == 23)
@@ -952,11 +895,9 @@ NB_G023 <- mle2(NB_mod_CI,
                 start = list( 'topt' = 25,
                               'rmax' = 100,
                               'a' = 1) )
-
-NB_G023
 ```
 
-```{r}
+```{r, echo=FALSE, warning=FALSE}
 conf_intervals_23 <- confint(NB_G023)
 
 new_row_names_23 <- c("topt23", "rmax23", "a23")
@@ -964,7 +905,7 @@ row.names(conf_intervals_23) <- new_row_names_23
 ```
 
 
-```{r}
+```{r, echo=FALSE, warning=FALSE}
 set.seed(1)
 
 data = filter(Fly_data, G0 == 27)
@@ -980,11 +921,9 @@ NB_G027 <- mle2(NB_mod_CI,
                 start = list( 'topt' = 25,
                               'rmax' = 100,
                               'a' = 1) )
-
-NB_G027
 ```                      
 
-```{r}
+```{r, echo=FALSE}
 conf_intervals_27 <- confint(NB_G027)
 
 new_row_names_27 <- c("topt27", "rmax27", "a27")
@@ -992,7 +931,7 @@ row.names(conf_intervals_27) <- new_row_names_27
 ```
 
 
-```{r}
+```{r, echo=FALSE}
 conf_intervals_merged <- rbind(conf_intervals_19, conf_intervals_23, conf_intervals_27)
 conf_intervals_merged <- round(conf_intervals_merged, digits = 2)
 
@@ -1035,8 +974,10 @@ fly_coefficients <- data.frame(Parameter=c('topt19',
                                        '5.36',
                                        '4.21',
                                        '3.59')) 
+
+fly_coefficients
 ```
 
-```{r}
+```{r, echo=FALSE}
 write.csv(fly_coefficients, "Fly TPC parameter estimates.csv")
 ```

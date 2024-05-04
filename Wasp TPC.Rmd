@@ -1,8 +1,8 @@
 ---
 title: "Wasp TPC"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 date: "2024-05-03"
 ---
 
@@ -26,8 +26,9 @@ Wasp_data$Total_count <- rowSums(Wasp_data[, c("Wasp_count", "Fly_count")])
 Wasp_data$Wasp_proportion <- Wasp_data$Wasp_count / Wasp_data$Total_count
 ```
 
+```{r # Linear model, include=FALSE}
 # Trying a linear model
-```{r, eval=FALSE}
+
 waspmod1 <- lm(Wasp_proportion ~ G1, data=Wasp_data)
 plot(waspmod1, which=2) #does not meet assumptions
 plot(waspmod1, which=1) 
@@ -38,7 +39,7 @@ plot(waspmod2, which=1)
 ```
 
 
-## GLMs - logistic
+# GLMs - logistic
 ```{r}
 waspglm2 <- glm(Wasp_proportion ~ G1*G0, data=Wasp_data,
                 weights = Total_count, ## giving it the information in the sample size per vial
@@ -104,16 +105,6 @@ data_table_wasp1
 write.csv(data_table_wasp1, "wasp_output1.csv", row.names = FALSE)
 ```
 
-
-# Model for simulation
-```{R}
-waspglm2_poly <- glm(Wasp_proportion ~ G1*poly(G0,2),
-                     data=Wasp_data,
-                     weights = Total_count,    
-                     family=binomial(link="logit"))
-```
-
-
 # Predictions
 ```{r, include=FALSE}
 new_data_seq <- expand_grid(G1 = seq(18, 29, by = 0.01),
@@ -123,7 +114,6 @@ new_data_seq$predictions_glm2<- predict(waspglm2, newdata = new_data_seq,type='r
 new_data_seq$predictions_NoG0<- predict(waspglm2_noG0, newdata = new_data_seq,type='response' )
 new_data_seq$predictions_NoInt<- predict(waspglm2_noint, newdata = new_data_seq,type='response' )
 new_data_seq$predictions_sepG0<- predict(waspglm2_sepG0, newdata = new_data_seq,type='response' )
-new_data_seq$predictions_poly<- predict(waspglm2_poly, newdata = new_data_seq,type='response' )
 ```
 
 
@@ -142,16 +132,8 @@ new_data_seq %>%
   facet_wrap(~G0, labeller = label_both)
 ```
 
-
-# Saving models
-```{r}
-save(waspglm2_poly, file = 'WaspModel') ## save to be loaded into simulation
-save(waspglm2_noG0, file = 'WaspModel_NoG0') ## save to be loaded into simulation
-```
-
-
 # Confidence Intervals
-```{r, echo=FALSE}
+```{r, message=FALSE, echo=FALSE}
 wasp_conf_intervals <- confint(waspglm2_sepG0)
 wasp_conf_intervals <- round(wasp_conf_intervals, digits = 2)
 
@@ -189,4 +171,18 @@ write.csv(wasp_coefficients, "Wasp TPC Parameter estimates.csv")
 ```
 
 
+# Model for simulation
+```{r}
+waspglm2_poly <- glm(Wasp_proportion ~ G1*poly(G0,2),
+                     data=Wasp_data,
+                     weights = Total_count,    
+                     family=binomial(link="logit"))
+```
+
+
+```{r saving models, echo=FALSE}
+# Saving models
+save(waspglm2_poly, file = 'WaspModel') ## save to be loaded into simulation
+save(waspglm2_noG0, file = 'WaspModel_NoG0') ## save to be loaded into simulation
+```
 

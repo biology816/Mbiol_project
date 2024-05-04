@@ -1,0 +1,1042 @@
+---
+title: "Fly TPC"
+output: html_document
+date: "2024-05-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading packages
+```{r}
+library(rTPC)
+library(tidyverse)
+library(nls.multstart)
+```
+
+# Loading data
+```{r}
+Fly_data <- read_csv('Fly counts.csv')
+```
+
+# Initial analysis
+```{r}
+start_vals <- get_start_vals(Fly_data$G1, Fly_data$Count, model_name = 'deutsch_2008')
+start_vals
+
+low_lims <- get_lower_lims(Fly_data$G1, Fly_data$Count, model_name = 'deutsch_2008')
+low_lims
+
+upper_lims <- get_upper_lims(Fly_data$G1, Fly_data$Count, model_name = 'deutsch_2008')
+upper_lims
+```
+
+## deutsch_2008 is one of the 25 different model formulations that can be accessed as part of rTPC. 
+
+```{r}
+fit <- nls_multstart(Count~deutsch_2008(temp = G1, 
+                                        rmax, topt, ctmax, a),
+                     data = Fly_data,
+                     iter = 500,
+                     start_lower = start_vals - 10, 
+                     start_upper = start_vals + 10,
+                     lower = low_lims,
+                     upper = upper_lims,
+                     supp_errors = 'Y')
+
+summary(fit)
+```
+
+```{r}
+new_data <- data.frame(G1 = seq(18, 28, by = 0.01))
+new_data$predictions <- predict(fit, newdata = new_data)
+
+new_data$predictions[new_data$predictions < 0] <- 0
+```
+
+```{r}
+ggplot() +
+  geom_point(aes(G1 , Count ), data = Fly_data) +
+  geom_line(aes(x=G1, y=predictions), data=new_data, col="blue") +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Offspring',
+       title = 'Single Model Fit')
+```
+
+
+# Parameter summary
+```{r}
+parameter_table <- data.frame(
+  Parameter = c('Topt', 
+                 'Rmax',
+                'CTmax',
+                 'a'),
+  Description = c('Optimum temperature', 
+  'Maximum reproduction at optimum temperature', 
+  'Critical thermal maximum', 
+  'Related to full curve width'))
+
+parameter_table
+write.csv(parameter_table, "parameter_output.csv", row.names = FALSE)
+```
+
+
+### Fitting each G0 seperately 
+```{r}
+fit_G019 <- nls_multstart(Count~deutsch_2008(temp = G1, 
+                                             rmax, topt, ctmax, a),
+                          data = filter( Fly_data, G0 == 19 ),
+                          iter = 500,
+                          start_lower = start_vals - 10,  
+                          start_upper = start_vals + 10, 
+                          lower = low_lims,
+                          upper = upper_lims,
+                          supp_errors = 'Y')
+
+fit_G019
+```
+
+```{r}
+fit_G023 <- nls_multstart(Count~deutsch_2008(temp = G1, 
+                                             rmax, topt, ctmax, a),
+                          data = filter( Fly_data, G0 == 23 ),
+                          iter = 500,
+                          start_lower = start_vals - 10,  
+                          start_upper = start_vals + 10,  
+                          lower = low_lims,
+                          upper = upper_lims,
+                          supp_errors = 'Y')
+
+fit_G023
+```
+
+```{r}
+fit_G027 <- nls_multstart(Count~deutsch_2008(temp = G1, 
+                                             rmax, topt, ctmax, a),
+                          data = filter( Fly_data, G0 == 27 ),
+                          iter = 500,
+                          start_lower = start_vals - 10,
+                          start_upper = start_vals + 10,
+                          lower = low_lims,
+                          upper = upper_lims,
+                          supp_errors = 'Y')
+
+fit_G027
+```
+
+```{r}
+fit_G027 <- nls_multstart(Count~deutsch_2008(temp = G1, 
+                                             rmax, topt, ctmax, a),
+                          data = filter( Fly_data, G0 == 27 ),
+                          iter = 5000,
+                          start_lower = c(rmax=0, topt=19, ctmax = 27.01,a =1), 
+                          start_upper =  c(rmax=30, topt=27, ctmax = 35,a =5), 
+                          lower =  c(rmax=0,  topt=19,  ctmax = 27.01,a =0),  #  <<<<<< raising ctmax floor to help fitting
+                          upper = upper_lims,
+                          supp_errors = 'Y')
+
+fit_G027
+```
+
+```{r}
+AIC(fit_G019) + AIC(fit_G023) + AIC(fit_G027)
+```
+
+## Fitting each G0 separately has a lower AIC = better model fit to data
+
+```{r}
+new_data_seq <- data.frame(G1 = seq(18, 28, by = 0.01))
+
+all_3_preds <- c( predict(fit_G019, newdata = new_data_seq),
+                  predict(fit_G023, newdata = new_data_seq),
+                  predict(fit_G027, newdata = new_data_seq))
+
+## some of the predictions past the max were wildly negative, so this sets those to just 0
+all_3_preds[all_3_preds<0]<-0 
+
+data.frame(G1 = rep(new_data_seq$G1, 3) ,
+           G0 = rep(c(19, 23, 27), each = nrow(new_data_seq)) ,
+           Pred_Count = all_3_preds) %>%
+  ggplot() +
+  geom_point(aes(G1, Count), data = Fly_data) +
+  geom_line(aes(G1, Pred_Count), col = 'blue') +
+  theme_bw(base_size = 12) +
+  facet_wrap(~G0)+
+  labs(x = 'Temperature (ºC)',
+       y = 'Offspring',
+       title = 'Seperate Model Fit')
+```
+
+
+## Plotting out parameters
+```{r}
+bind_rows(
+  summary(fit_G019)$coefficients%>% as.data.frame %>% rownames_to_column('Param') %>% mutate(G0 = 19),
+  summary(fit_G023)$coefficients%>% as.data.frame %>% rownames_to_column('Param') %>% mutate(G0 = 23),
+  summary(fit_G027)$coefficients%>% as.data.frame %>% rownames_to_column('Param') %>% mutate(G0 = 27)) %>%
+  ggplot(aes(G0, y = Estimate)) +
+  geom_point() +
+  geom_errorbar( aes( x = G0,
+                      ymin = Estimate-`Std. Error`,
+                      ymax = Estimate+`Std. Error`)) +
+  facet_wrap(~Param, scales = 'free') +
+  theme_classic() +
+  ggtitle( 'Parameter Estimates (+/- SE)')
+```
+
+
+# Fitting linear dependence of each parameter on temperature
+```{r}
+## Defining custom function
+deutsch_2008_TEMP <- function(temp, 
+                              G0,  
+                              rmax19, 
+                              topt19,
+                              ctmax19,
+                              a19,
+                              rmaxT, 
+                              toptT,
+                              ctmaxT,
+                              aT ){
+  ## getting difference from 19 degree G0 baseline:
+  rmax =   rmax19 + (G0-19) * rmaxT
+  topt =  topt19 + (G0-19) * toptT
+  ctmax =  ctmax19+ (G0-19) * ctmaxT
+  a = a19+ (G0-19) * aT 
+  
+  # Calculating TPC as before
+  
+  return(ifelse(temp < topt, rmax * exp(-((temp - topt)/(2 * a))^2), 
+                rmax * (1 - ((temp - topt)/(topt - ctmax))^2)))
+  
+}
+
+params_names = c( 'rmax19', 'topt19', 'ctmax19', 'a19','rmaxT', 'toptT', 'ctmaxT', 'aT')
+
+start_lower_temp = c(start_vals-10, -10, -10, -10,  -10 )
+start_upper_temp = c(start_vals+10, 10,  10,  10,   10  )
+lower_temp       = c(low_lims,  -100, -100, -100 , -100  )
+upper_temp       = c(upper_lims, 100,  100,  100,   100 )
+
+names(start_lower_temp )  <- params_names 
+names(start_upper_temp )  <- params_names
+names(lower_temp       )  <- params_names
+names(upper_temp       )  <- params_names     
+
+fit_temp <- nls_multstart(Count~deutsch_2008_TEMP(temp = G1, 
+                                                  G0 = G0,
+                                                  rmax19, topt19, ctmax19, a19,
+                                                  rmaxT, toptT, ctmaxT, aT),
+                          data = Fly_data,
+                          iter = 500,
+                          start_lower = start_lower_temp,
+                          start_upper = start_upper_temp,
+                          lower = lower_temp,
+                          upper = upper_temp,
+                          supp_errors = 'Y')
+
+fit_temp
+
+```
+
+# Defining custom function
+```{r}
+## Defining custom function (this time with just a single CTmax, that doesn't change with G0)
+### NB not renaming everything...
+
+deutsch_2008_TEMP <- function(temp, 
+                              G0,  
+                              rmax19, 
+                              topt19,
+                              ctmax,
+                              a19,
+                              rmaxT, 
+                              toptT,
+                              aT ){
+  ## getting difference from 19 degree G0 baseline:
+  rmax =   rmax19 + (G0-19) * rmaxT
+  topt =  topt19 + (G0-19) * toptT
+  a = a19+ (G0-19) * aT 
+  
+  # Calculating TPC as before
+  
+  return(ifelse(temp < topt, rmax * exp(-((temp - topt)/(2 * a))^2), 
+                rmax * (1 - ((temp - topt)/(topt - ctmax))^2)))
+  
+}
+
+params_names = c( 'rmax19', 'topt19', 'ctmax', 'a19','rmaxT', 'toptT', 'aT')
+start_lower_temp = c(20  , 23,  27,   1 , -1, -1, -1)
+start_upper_temp = c(220 , 27,  35,   2 ,  1,  1,  1 )
+lower_temp       = c( 0  , 19,  19 ,    0 ,  -100, -100, -100 )
+upper_temp       = c(200 , 28 ,  40  ,  80 , 100,  100,  100)
+
+names(start_lower_temp )  <- params_names 
+names(start_upper_temp )  <- params_names
+names(lower_temp       )  <- params_names
+names(upper_temp       )  <- params_names     
+
+fit_temp2 <- nls_multstart(Count~deutsch_2008_TEMP(temp = G1, 
+                                                   G0 = G0,
+                                                   rmax19, topt19, ctmax, a19,
+                                                   rmaxT, toptT, aT),
+                           data = Fly_data,
+                           iter = 500,
+                           start_lower = start_lower_temp,
+                           start_upper = start_upper_temp,
+                           lower = lower_temp,
+                           upper = upper_temp,
+                           supp_errors = 'Y')
+
+fit_temp2
+```
+
+```{r}
+new_data_2 <- expand_grid(G1 = seq(18, 27, by = 0.01),
+                          G0 = c(19, 23, 27))
+new_data_2$predictions<- predict(fit_temp2, newdata = new_data_2)
+
+
+new_data_2 %>%
+  ggplot() +
+  geom_point(aes(G1, Count), data = Fly_data) +
+  geom_line(aes(G1, predictions, col = G0), col = 'blue') +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Offspring',
+       title = 'Linear Temp Model Fit')+
+  facet_wrap(~G0, labeller = label_both)
+```
+
+```{r}
+## Possibly transformation of counts before data fitting may help, eg Gaussian:
+
+
+new_data_2 %>%
+  ggplot() +
+  geom_point(aes(G1, Count), data = Fly_data) +
+  geom_line(aes(G1, predictions, col = G0), col = 'blue') +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Offspring',
+       title = 'Linear Temp Model Fit') +
+  facet_wrap(~G0, labeller = label_both) +
+  scale_y_sqrt()
+```
+
+```{r}
+AIC(fit, fit_temp2) 
+```
+
+
+####
+# Trying different distributions with custom function
+
+# Loading packages
+```{r}
+library(bbmle)
+```
+
+
+# Poisson
+```{r}
+set.seed(1)
+
+Poisson_mod = function(topt, rmax, a){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  for(i in 1: nrow(data)){
+    temp = data$G1[i]  
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  
+  return( -sum(dpois( data$Count, Estimate_vec, log = TRUE ))   )
+}
+
+Poisson_fit <- mle2(Poisson_mod, 
+                    method="L-BFGS-B",
+                    upper = c('topt' = 29,
+                              'rmax' = 1000,
+                              'a' = 100),
+                    lower = c('topt' = 20,
+                              'rmax' = 1,
+                              'a' = 0.5),
+                    start = list( 'topt' = 25, 'rmax' = 100, 'a' = 1),
+                    data = Fly_data)
+
+Poisson_logLik <- logLik(Poisson_fit)
+Poisson_logLik
+AIC(Poisson_fit)
+
+save(Poisson_fit, file = "Fly TPC models/Poisson_fit")
+```
+
+
+# Negative binomial
+```{r}
+set.seed(1)
+
+NB_mod = function(topt, rmax, a, shape){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  for(i in 1: nrow(data)){
+    temp = data$G1[i] 
+    
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  
+  return( -sum(dnbinom( data$Count,
+                        mu= Estimate_vec,
+                        size = 1,
+                        log = TRUE ))   )
+}
+```
+
+```{r}
+set.seed(1)
+
+NB_AllG0Together_fit <- mle2(NB_mod, 
+                             method="L-BFGS-B",
+                    upper = c('topt' = 29,
+                              'rmax' = 1000,
+                              'a' = 100,
+                              'shape' = 10),
+                    lower = c('topt' = 20,
+                              'rmax' = 1,
+                              'a' = 0.5,
+                              'shape' = 0.0001),
+                             start = list( 'topt' = 25,
+                                           'rmax' = 100,
+                                           'shape' =1,
+                                           'a' = 1),
+                             data = Fly_data)
+
+NB_AllG0Together_fit
+AIC(NB_AllG0Together_fit)
+
+save(NB_AllG0Together_fit, file = "Fly TPC models/NB_AllG0Together_fit")
+```
+
+```{r}
+Prediction1 <- data.frame( G1 = seq(18, 28, by = 0.01),
+                           Expectation = NA)
+
+NB_AllG0Together_fit@coef
+ctmax = 30
+topt= NB_AllG0Together_fit@coef[1]
+rmax= NB_AllG0Together_fit@coef[2]
+a= NB_AllG0Together_fit@coef[3]
+for(i in 1: nrow(Prediction1)){
+  temp = Prediction1$G1[i]  
+  Prediction1$Expectation[i] <- ifelse(temp< topt,
+                                       rmax * exp(-((temp - topt)/(2 * a))^2), 
+                                       rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+}
+```
+
+```{r}
+plot(Prediction1)
+```
+
+
+# Fitting linear dependence of each parameter on temperature
+```{r}
+set.seed(1)
+
+NB_mod_TEMP = function(toptT, topt19, rmaxT, rmax19, aT, a19, shape){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  for(i in 1: nrow(data)){
+    G0 = data$G0[i] 
+    temp = data$G1[i] 
+    rmax =   rmax19 + (G0-19) * rmaxT
+    topt =  topt19 + (G0-19) * toptT
+    a = a19 + (G0-19) * aT 
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  
+  return( -sum(dnbinom( data$Count,
+                        mu= Estimate_vec,
+                        size = shape,
+                        log = TRUE ))   )
+}
+
+data = Fly_data
+NB_Linear_Temp_fit <- mle2(NB_mod_TEMP, 
+                           method="L-BFGS-B",
+                           upper=c('toptT' = 29,
+                                   'topt19' = 29,
+                                   'rmaxT' = 1000,
+                                   'rmax19' = 1000,
+                                   'aT' = 100,
+                                   'a19' = 100,
+                                   'shape' =10),
+                           lower=c('toptT' = 20,
+                                   'topt19' = 20,
+                                   'rmaxT' = 1,
+                                   'rmax19' = 1,
+                                   'aT' = 0.5,
+                                   'a19' = 0.5,
+                                   'shape' =0.0001), 
+                           start = list( 'toptT' = 0, 'topt19' = 25,
+                                         'rmaxT' = 0, 'rmax19' = 100,
+                                         'aT' = 0, 'a19' = 1,
+                                         'shape' = 1),
+                           data = (Fly_data))
+
+NB_Linear_Temp_fit
+AIC(NB_Linear_Temp_fit)
+
+save(NB_Linear_Temp_fit, file = "Fly TPC models/NB_Linear_Temp_fit")
+```
+
+
+# All_but_one three way split
+```{r}
+set.seed(1)
+
+NB_AllG0Seperate = function(topt19,topt23,topt27, 
+                            rmax19,rmax23,rmax27,
+                            a19,   a23,   a27, 
+                            shape){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  
+  for(i in 1: nrow(data)){
+    G0 = data$G0[i] 
+    temp = data$G1[i] 
+    rmax =   ifelse(G0==19, rmax19, ifelse(G0==23, rmax23, rmax27))
+    topt =   ifelse(G0==19, topt19, ifelse(G0==23, topt23, topt27))
+    a =      ifelse(G0==19,    a19, ifelse(G0==23,    a23,    a27))
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  # print(unique(Estimate_vec))
+  #  print(dnbinom( data$Count,
+  #                       mu= Estimate_vec,
+  #                       size = shape,
+  #                       log = TRUE ) )
+  # print(shape)
+  return( -sum(dnbinom( data$Count,
+                        mu= Estimate_vec,
+                        size = shape,
+                        log = TRUE ))   )
+}
+data = Fly_data
+
+NB_AllG0Seperate_fit <- mle2(NB_AllG0Seperate, 
+                             method="L-BFGS-B",
+                             upper=c('topt19' = 29,
+                                     'rmax19' = 1000,
+                                     'topt23' = 29,
+                                     'rmax23' = 1000,
+                                     'topt27' = 29,
+                                     'rmax27' = 1000,
+                                     'shape' =10,
+                                     'a19' = 100,
+                                     'a23' = 100,
+                                     'a27' = 100),
+                             lower=c('topt19' = 20,
+                                     'rmax19' = 1,
+                                     'topt23' = 20,
+                                     'rmax23' = 1,
+                                     'topt27' = 20,
+                                     'rmax27' = 1,
+                                     'shape' = 0.0001,
+                                     'a19' = 0.5,
+                                     'a23' = 0.5,
+                                     'a27' = 0.5), 
+                             start = list( 'topt19' = 25,
+                                           'rmax19' = 100,
+                                           'topt23' = 25,
+                                           'rmax23' = 100,
+                                           'topt27' = 25,
+                                           'rmax27' = 100,
+                                           'shape' =1,
+                                           'a19' = 5,
+                                           'a23' = 5,
+                                           'a27' = 5),
+                             data = Fly_data)
+
+NB_AllG0Seperate_fit
+AIC(NB_AllG0Seperate_fit)
+
+save(NB_AllG0Seperate_fit, file = "Fly TPC models/NB_AllG0Seperate_fit")
+```
+
+
+# All except Topt
+```{r}
+set.seed(1)
+
+NB_All_Ex_topt = function(topt, 
+                          rmax19,rmax23,rmax27,
+                          a19,   a23,   a27, 
+                          shape){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  
+  for(i in 1: nrow(data)){
+    G0 = data$G0[i] 
+    temp = data$G1[i] 
+    rmax =   ifelse(G0==19, rmax19, ifelse(G0==23, rmax23, rmax27))
+    #    topt =   ifelse(G0==19, topt19, ifelse(G0==23, topt23, topt27))
+    a =      ifelse(G0==19,    a19, ifelse(G0==23,    a23,    a27))
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  
+  return( -sum(dnbinom( data$Count,
+                        mu= Estimate_vec,
+                        size = shape,
+                        log = TRUE ))   )
+}
+
+
+NB_All_Ex_topt_fit <- mle2(NB_All_Ex_topt, 
+                           method="L-BFGS-B",
+                           upper=c('rmax19' = 1000,
+                                     'rmax23' = 1000,
+                                     'rmax27' = 1000,
+                                     'shape' =10,
+                                     'a19' = 100,
+                                     'a23' = 100,
+                                     'a27' = 100),
+                             lower=c('rmax19' = 1,
+                                     'rmax23' = 1,
+                                     'rmax27' = 1,
+                                     'shape' = 0.0001,
+                                     'a19' = 0.5,
+                                     'a23' = 0.5,
+                                     'a27' = 0.5),
+                           start = list( 'topt' = 25,
+                                         'rmax19' = 100,
+                                         'rmax23' = 100,
+                                         'rmax27' = 100,
+                                         'shape' =1,
+                                         'a19' = 1,
+                                         'a23' = 1,
+                                         'a27' = 1),
+                           data = Fly_data)
+
+NB_All_Ex_topt_fit
+
+save(NB_All_Ex_topt_fit, file = "Fly TPC models/NB_All_Ex_topt_fit")
+```
+
+
+# All except Rmax
+```{r}
+set.seed(1)
+
+NB_All_Ex_rmax = function(topt19, topt23, topt27,
+                          rmax,
+                          a19,   a23,   a27, 
+                          shape){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  
+  for(i in 1: nrow(data)){
+    G0 = data$G0[i] 
+    temp = data$G1[i] 
+    # rmax =   ifelse(G0==19, rmax19, ifelse(G0==23, rmax23, rmax27))
+    topt =   ifelse(G0==19, topt19, ifelse(G0==23, topt23, topt27))
+    a =      ifelse(G0==19,    a19, ifelse(G0==23,    a23,    a27))
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  
+  return( -sum(dnbinom( data$Count,
+                        mu= Estimate_vec,
+                        size = shape,
+                        log = TRUE ))   )
+}
+data = Fly_data
+
+NB_All_Ex_rmax_fit <- mle2(NB_All_Ex_rmax, 
+                           method="L-BFGS-B",
+                           upper=c('topt19' = 29,
+                                     'topt23' = 29,
+                                     'topt27' = 29,
+                                     'shape' =10,
+                                     'a19' = 100,
+                                     'a23' = 100,
+                                     'a27' = 100),
+                             lower=c('topt19' = 20,
+                                     'topt23' = 20,
+                                     'topt27' = 20,
+                                     'shape' = 0.0001,
+                                     'a19' = 0.5,
+                                     'a23' = 0.5,
+                                     'a27' = 0.5),
+                           start = list( 'topt19' = 25,
+                                         'rmax' = 100,
+                                         'topt23' = 25,
+                                         'topt27' = 25,
+                                         'shape' =1,
+                                         'a19' = 1,
+                                         'a23' = 1,
+                                         'a27' = 1),
+                           data = Fly_data)
+
+NB_All_Ex_rmax_fit
+AIC(NB_All_Ex_rmax_fit)
+
+save(NB_All_Ex_rmax_fit, file = "Fly TPC models/NB_All_Ex_rmax_fit")
+```
+
+
+# All except a
+```{r}
+set.seed(1)
+
+NB_All_Ex_a = function(topt19,topt23,topt27, 
+                       rmax19, rmax23, rmax27,
+                       a, 
+                       shape){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  
+  for(i in 1: nrow(data)){
+    G0 = data$G0[i] 
+    temp = data$G1[i] 
+    rmax =   ifelse(G0==19, rmax19, ifelse(G0==23, rmax23, rmax27))
+    topt =   ifelse(G0==19, topt19, ifelse(G0==23, topt23, topt27))
+    # a =      ifelse(G0==19,    a19, ifelse(G0==23,    a23,    a27))
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  
+  return( -sum(dnbinom( data$Count,
+                        mu= Estimate_vec,
+                        size = shape,
+                        log = TRUE ))   )
+}
+data = Fly_data
+
+NB_All_Ex_a_fit <- mle2(NB_All_Ex_a , 
+                        method="L-BFGS-B",
+                        upper=c('topt19' = 29,
+                                     'rmax19' = 1000,
+                                     'topt23' = 29,
+                                     'rmax23' = 1000,
+                                     'topt27' = 29,
+                                     'rmax27' = 1000,
+                                     'shape' =10),
+                             lower=c('topt19' = 20,
+                                     'rmax19' = 1,
+                                     'topt23' = 20,
+                                     'rmax23' = 1,
+                                     'topt27' = 20,
+                                     'rmax27' = 1,
+                                     'shape' = 0.0001),
+                        start = list( 'topt19' = 25,
+                                      'rmax19' = 100,
+                                      'rmax23' = 100,
+                                      'rmax27' = 100,
+                                      'topt23' = 25,
+                                      'topt27' = 25,
+                                      'shape' =1,
+                                      'a'=1),
+                        data = Fly_data)
+
+NB_All_Ex_a_fit
+AIC(NB_All_Ex_a_fit)
+
+save(NB_All_Ex_a_fit, file = "Fly TPC models/NB_All_Ex_a_fit")
+```
+
+
+# Creating table
+```{r}
+load('Fly TPC models/Poisson_fit')
+load('Fly TPC models/NB_Linear_Temp_fit')
+load('Fly TPC models/NB_AllG0Together_fit')
+load('Fly TPC models/NB_AllG0Seperate_fit')
+load('Fly TPC models/NB_All_Ex_topt_fit')
+load('Fly TPC models/NB_All_Ex_rmax_fit')
+load('Fly TPC models/NB_All_Ex_a_fit')
+```
+
+```{r}
+data_table1 <- data.frame(
+  Model = c('1a',
+            '1b',
+            '1c',
+            '1d',
+            '1e',
+            '1f',
+            '1g'),
+  Distribution = c('Poisson',
+                   'Negative Binomial',
+                   'Negative Binomial',
+                   'Negative Binomial',
+                   'Negative Binomial',
+                   'Negative Binomial',
+                   'Negative Binomial'),
+  Temperature_dependence_of_parameters_Topt_Rmax_a = c('None',
+                                           'None',
+                                           'theta_i=Ttheta_T,i + theta_19,i',
+                                           'theta_i= { If T=19, t ',
+                                           'Like 1d for Rmax and a, and like 1b for Topt',
+                                           'Like 1d for Topt and a, and like 1b for Rmax',
+                                           'Like 1d for Topt and Rmax, and like 1b for a'),
+  n = c(3, 4, 7, 10, 8, 8, 8),
+  Likelihood = round(c(logLik(Poisson_fit), 
+                 logLik(NB_AllG0Together_fit), 
+                 logLik(NB_Linear_Temp_fit), 
+                 logLik(NB_AllG0Seperate_fit), 
+                 logLik(NB_All_Ex_topt_fit), 
+                 logLik(NB_All_Ex_rmax_fit), 
+                 logLik(NB_All_Ex_a_fit)), digits=2),
+  AIC_Difference = round(c((AIC(Poisson_fit)-AIC(NB_AllG0Seperate_fit)), 
+          (AIC(NB_AllG0Together_fit)-AIC(NB_AllG0Seperate_fit)), 
+          (AIC(NB_Linear_Temp_fit)-AIC(NB_AllG0Seperate_fit)), 
+          (AIC(NB_AllG0Seperate_fit)-AIC(NB_AllG0Seperate_fit)), 
+          (AIC(NB_All_Ex_topt_fit)-AIC(NB_AllG0Seperate_fit)), 
+          (AIC(NB_All_Ex_rmax_fit)-AIC(NB_AllG0Seperate_fit)), 
+          (AIC(NB_All_Ex_a_fit)-AIC(NB_AllG0Seperate_fit))), digits=2)
+)
+
+data_table1
+```
+
+```{r}
+write.csv(data_table1, "fly model output1.csv", row.names = FALSE)
+```
+
+
+# Predictions
+```{r}
+load('Fly TPC models/NB_AllG0Seperate_fit')
+
+new_data_seq <- data.frame(G1 = seq(18, 28, by = 0.1))
+Prediction <- data.frame(G1 = rep(new_data_seq$G1, 3),
+                         G0 = rep(c(19, 23, 27), each = nrow(new_data_seq)), Expectation=NA)
+
+NB_AllG0Seperate_fit@coef
+ctmax = 30
+topt19= NB_AllG0Seperate_fit@coef[1]
+topt23= NB_AllG0Seperate_fit@coef[2]
+topt27= NB_AllG0Seperate_fit@coef[3]
+rmax19= NB_AllG0Seperate_fit@coef[4]
+rmax23= NB_AllG0Seperate_fit@coef[5]
+rmax27= NB_AllG0Seperate_fit@coef[6]
+a19= NB_AllG0Seperate_fit@coef[7]
+a23= NB_AllG0Seperate_fit@coef[8]
+a27= NB_AllG0Seperate_fit@coef[9]
+
+for(i in 1: nrow(Prediction)){
+  rmax =   ifelse(Prediction$G0[i]==19, rmax19, 
+                  ifelse(Prediction$G0[i]==23, rmax23, rmax27))
+  topt =   ifelse(Prediction$G0[i]==19, topt19, 
+                  ifelse(Prediction$G0[i]==23, topt23, topt27))
+  a =      ifelse(Prediction$G0[i]==19,    a19, 
+                  ifelse(Prediction$G0[i]==23,    a23,    a27)) 
+
+  temp = Prediction$G1[i]  
+  Prediction$Expectation[i] <- ifelse(temp< topt,
+                                      rmax * exp(-((temp - topt)/(2 * a))^2), 
+                                      rmax * (1 - ((temp - topt)/(topt - ctmax))^2)) 
+  
+  
+  }
+
+Prediction %>%
+  ggplot() +
+  geom_point(aes(G1, Count), alpha=0.5, data = Fly_data) +
+  geom_line(aes(G1, Expectation, col = G0), col = '#0072B2') +
+  theme_bw(base_size = 12) +
+  theme(text = element_text(size = 9)) +
+   scale_x_continuous(breaks = seq(19, 27, by = 2)) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Offspring',
+       title = 'Fly Thermal Performance Curves')+
+  facet_wrap(~G0, labeller = label_both)
+
+```
+
+
+# Confidence intervals
+```{r}
+set.seed(1)
+
+NB_mod_CI = function(topt, rmax, a){
+  ctmax = 30
+  Estimate_vec <- rep(NA, nrow(data))
+  for(i in 1: nrow(data)){
+    temp = data$G1[i] 
+    
+    Estimate_vec[i] <- ifelse(temp< topt,
+                              rmax * exp(-((temp - topt)/(2 * a))^2), 
+                              rmax * (1 - ((temp - topt)/(topt - ctmax))^2))
+  }
+  
+  Estimate_vec[Estimate_vec<0.00001]<-0.00001
+  
+  return( -sum(dnbinom( data$Count,
+                        mu= Estimate_vec,
+                        size = 1,
+                        log = TRUE ))   )
+}
+```
+
+```{r}
+set.seed(1)
+
+data = filter(Fly_data, G0 == 19)
+NB_G019 <- mle2(NB_mod_CI, 
+                data = filter(Fly_data, G0 == 19),
+                method="L-BFGS-B",
+                upper = c('topt' = 29,
+                          'rmax' = 1000,
+                          'a' = 100),
+                lower = c('topt' = 20,
+                          'rmax' = 1,
+                          'a' = 0.5),
+                start = list( 'topt' = 25,
+                              'rmax' = 100,
+                              'a' = 1) )
+
+NB_G019
+```
+
+```{r}
+conf_intervals_19 <- confint(NB_G019)
+
+new_row_names_19 <- c("topt19", "rmax19", "a19")
+row.names(conf_intervals_19) <- new_row_names_19
+```
+
+
+```{r}
+set.seed(1)
+
+data = filter(Fly_data, G0 == 23)
+NB_G023 <- mle2(NB_mod_CI, 
+                data = filter(Fly_data, G0 == 23),
+                method="L-BFGS-B",
+                upper = c('topt' = 29,
+                          'rmax' = 1000,
+                          'a' = 100),
+                lower = c('topt' = 20,
+                          'rmax' = 1,
+                          'a' = 0.5),
+                start = list( 'topt' = 25,
+                              'rmax' = 100,
+                              'a' = 1) )
+
+NB_G023
+```
+
+```{r}
+conf_intervals_23 <- confint(NB_G023)
+
+new_row_names_23 <- c("topt23", "rmax23", "a23")
+row.names(conf_intervals_23) <- new_row_names_23
+```
+
+
+```{r}
+set.seed(1)
+
+data = filter(Fly_data, G0 == 27)
+NB_G027 <- mle2(NB_mod_CI, 
+                data = filter(Fly_data, G0 == 27),
+                method="L-BFGS-B",
+                upper = c('topt' = 29,
+                          'rmax' = 1000,
+                          'a' = 100),
+                lower = c('topt' = 20,
+                          'rmax' = 1,
+                          'a' = 0.5),
+                start = list( 'topt' = 25,
+                              'rmax' = 100,
+                              'a' = 1) )
+
+NB_G027
+```                      
+
+```{r}
+conf_intervals_27 <- confint(NB_G027)
+
+new_row_names_27 <- c("topt27", "rmax27", "a27")
+row.names(conf_intervals_27) <- new_row_names_27
+```
+
+
+```{r}
+conf_intervals_merged <- rbind(conf_intervals_19, conf_intervals_23, conf_intervals_27)
+conf_intervals_merged <- round(conf_intervals_merged, digits = 2)
+
+load('Fly TPC models/NB_AllG0Seperate_fit')
+fly_parameter_estimates <- round(NB_AllG0Seperate_fit@coef, digits=2)
+
+fly_coefficients <- data.frame(Parameter=c('topt19',
+                                            'topt23',
+                                            'topt27',
+                                            'rmax19',
+                                            'rmax23',
+                                            'rmax27',
+                                            'a19',
+                                            'a23',
+                                            'a27'),
+                                Estimate=c('28.37',
+                                              '28.35',
+                                              '29.00',
+                                              '46.11',
+                                              '71.31',
+                                              '20.50',
+                                              '4.21',
+                                              '3.65',
+                                              '3.22'),
+                                '2.5' =c('24.38',
+                                       '24.07',
+                                       '26.81',
+                                       '34.76',
+                                       '48.67',
+                                       '14.71',
+                                       '2.37',
+                                       '1.99',
+                                       '2.59'),
+                                '97.5' =c('NA',
+                                       '28.99',
+                                       'NA',
+                                       '58.44',
+                                       '76.15',
+                                       '25.27',
+                                       '5.36',
+                                       '4.21',
+                                       '3.59')) 
+```
+
+```{r}
+write.csv(fly_coefficients, "Fly TPC parameter estimates.csv")
+```

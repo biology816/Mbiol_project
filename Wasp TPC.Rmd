@@ -1,0 +1,191 @@
+---
+title: "Wasp TPC"
+output: html_document
+date: "2024-05-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading packages
+```{r}
+library(tidyverse)
+```
+
+# Loading data
+```{r}
+Wasp_data <- read_csv("Wasp counts.csv")
+```
+
+# Wasp proportion
+```{r}
+Wasp_data$Total_count <- rowSums(Wasp_data[, c("Wasp_count", "Fly_count")])
+Wasp_data$Wasp_proportion <- Wasp_data$Wasp_count / Wasp_data$Total_count
+```
+
+# Trying a linear model
+```{r}
+waspmod1 <- lm(Wasp_proportion ~ G1, data=Wasp_data)
+plot(waspmod1, which=2) #does not meet assumptions
+plot(waspmod1, which=1) 
+
+waspmod2 <- lm(Wasp_proportion ~ G1*G0, data=Wasp_data)
+plot(waspmod2, which=2) #does not meet assumptions
+plot(waspmod2, which=1)
+```
+
+
+# GLMs - logistic
+```{r}
+waspglm2 <- glm(Wasp_proportion ~ G1*G0, data=Wasp_data,
+                weights = Total_count, ## giving it the information in the sample size per vial
+                family=binomial(link="logit"))
+summary(waspglm2)
+
+
+waspglm2_noG0 <- glm(Wasp_proportion ~ G1, data=Wasp_data,
+                      weights = Total_count,
+                      family=binomial(link="logit"))
+
+waspglm2_noint <- glm(Wasp_proportion ~ G1+G0, data=Wasp_data,
+                      weights = Total_count,
+                      family=binomial(link="logit"))
+
+waspglm2_sepG0 <- glm(Wasp_proportion ~ G1*factor(G0), data=Wasp_data,
+                      weights = Total_count,   
+                      family=binomial(link="logit"))
+## Treating G0 as a factor instead of a number (i.e a different fit for each of the G0 options)
+
+AIC(waspglm2, waspglm2_noG0, waspglm2_noint, waspglm2_sepG0) 
+## From this can see waspglm2_sepG0 has the lowest AIC score
+## Very strong support for interaction, and for separating the G0.
+```
+
+
+# Model comparison table
+```{r}
+data_table_wasp1 <- data.frame(
+  Model = c('2a',
+            '2b',
+            '2c',
+            '2d'),
+  Interaction = c('Absent',
+                  'Absent',
+                  'Present',
+                  'Present'),
+  G0 = c('Absent', 
+            'Linear',
+            'Linear',
+            'Factor'),
+  Explanatory_variable = c('G1',
+                           'G1+G0',
+                           'G1*G0',
+                           'G1*factor(G0)'),
+  n = c('2', 
+        '3',
+        '4',
+        '6'),
+  Likelihood = round(c(logLik(waspglm2_noG0), 
+                       logLik(waspglm2_noint), 
+                       logLik(waspglm2), 
+                       logLik(waspglm2_sepG0)), digits = 2),
+  AIC_Difference = round(c(
+                (AIC(waspglm2_noG0)-AIC(waspglm2_sepG0)), 
+                (AIC(waspglm2_noint)-AIC(waspglm2_sepG0)), 
+                (AIC(waspglm2)-AIC(waspglm2_sepG0)), 
+                (AIC(waspglm2_sepG0)-AIC(waspglm2_sepG0))), digits = 2)
+)
+
+data_table_wasp1
+```
+
+```{r}
+write.csv(data_table_wasp1, "wasp_output1.csv", row.names = FALSE)
+```
+
+
+# Model for simulation
+```{R}
+waspglm2_poly <- glm(Wasp_proportion ~ G1*poly(G0,2),
+                     data=Wasp_data,
+                     weights = Total_count,    
+                     family=binomial(link="logit"))
+```
+
+
+# Predictions
+```{r}
+new_data_seq <- expand_grid(G1 = seq(18, 29, by = 0.01),
+                            G0 = c(19, 23, 27))
+
+new_data_seq$predictions_glm2<- predict(waspglm2, newdata = new_data_seq,type='response' )
+new_data_seq$predictions_NoG0<- predict(waspglm2_noG0, newdata = new_data_seq,type='response' )
+new_data_seq$predictions_NoInt<- predict(waspglm2_noint, newdata = new_data_seq,type='response' )
+new_data_seq$predictions_sepG0<- predict(waspglm2_sepG0, newdata = new_data_seq,type='response' )
+new_data_seq$predictions_poly<- predict(waspglm2_poly, newdata = new_data_seq,type='response' )
+```
+
+
+# Plotting
+```{r}
+new_data_seq %>%
+  ggplot() +
+  geom_point(aes(G1, Wasp_proportion), data = Wasp_data, alpha=0.5) +
+  geom_line(aes(G1, predictions_sepG0), col = '#0072B2') +
+  theme_bw(base_size = 12) +
+    theme(text = element_text(size = 9)) +
+   scale_x_continuous(breaks = seq(19, 27, by = 2)) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Wasp Proportion')+
+  ggtitle( 'Wasp Thermal Performance')+
+  facet_wrap(~G0, labeller = label_both)
+```
+
+
+# Saving models
+```{r}
+save(waspglm2_poly, file = 'WaspModel') ## save to be loaded into simulation
+save(waspglm2_noG0, file = 'WaspModel_NoG0') ## save to be loaded into simulation
+```
+
+
+# Confidence Intervals
+```{r}
+wasp_conf_intervals <- confint(waspglm2_sepG0)
+wasp_conf_intervals <- round(wasp_conf_intervals, digits = 2)
+
+wasp_coef <- round(waspglm2_sepG0$coefficients, digits=2)
+
+wasp_coefficients <- data.frame(Parameter=c('(Intercept)',
+                                            'G1',
+                                            'factor(G0)23',
+                                            'factor(G0)27',
+                                            'G1:factor(G0)23',
+                                            'G1:factor(G0)27'),
+                                Estimate=c('1.83',
+                                              '-0.07',
+                                              '-1.51',
+                                              '-4.38',
+                                              '0.11',
+                                              '0.24'),
+                                '2.5' =c('1.44',
+                                       '-0.08',
+                                       '-2.04',
+                                       '-5.04',
+                                       '0.09',
+                                       '0.21'),
+                                '97.5' =c('2.22',
+                                       '-0.05',
+                                       '-0.97',
+                                       '-3.73',
+                                       '0.14',
+                                       '0.27')) 
+```
+
+```{r}
+write.csv(wasp_coefficients, "Wasp TPC Parameter estimates.csv")
+```
+
+
+

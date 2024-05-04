@@ -13,6 +13,11 @@ knitr::opts_chunk$set(echo = TRUE)
 # Loading packages
 ```{r}
 library(tidyverse)
+library(rTPC)
+library(nls.multstart)
+library(bbmle)
+library(viridisLite)
+library(psych)
 ```
 
 
@@ -73,7 +78,7 @@ mtext("Simulation model environmental conditions", side = 3, line = 1, cex = 1)
 
 
 ## Fly interpolation functions
-```{r}
+```{r, echo=FALSE, warning=FALSE}
 load('Fly TPC models/NB_AllG0Seperate_fit')
 
 topt19  = 28.3656893
@@ -144,8 +149,8 @@ mtext("Fly Interpolation Functions", side = 3, line = -2, outer = TRUE, cex = 1.
 ```
 
 
-# Function to calculate Environmental Performance Curve
-```{r}
+# Environmental Performance Curve
+```{r, echo=FALSE}
 EPC_trans = function(G1_temp, G0_temp, cTmax){
   Rmax<- Rmax_interp(G0_temp)
   Topt<- Topt_interp(G0_temp)
@@ -155,10 +160,7 @@ EPC_trans = function(G1_temp, G0_temp, cTmax){
                     1 - ((G1_temp - Topt)/(Topt - cTmax))^2)
   return(R)
 }
-```
 
-# Plotting EPC
-```{r}
 library(viridis)
 color_palette <- viridis_pal(option="C")(12)
 
@@ -184,7 +186,7 @@ expand_grid(G0 = seq(from = 19, to = 30, by = 1),
 
 
 # Function to make autocorrelate numbers
-```{R}
+```{r}
 Make_AC_data<- function(N, sd, AC){
   numbers <- rep(NA, N)
   numbers[1] <- rnorm(1,0)  # Mean=0
@@ -194,25 +196,17 @@ Make_AC_data<- function(N, sd, AC){
   }
 return(  scale(numbers)  *sd)
 }
-
-## testing
-Make_AC_data(2000, sd=3.567, AC=0.8) -> X
-X%>% plot
-mean(X)
-sd(X)
 ```
 
 
-# Function to predict wasp from G0 and G1
-```{r}
-load('WaspModel') ##waspglm2_poly
-load('WaspModel_NoG0') ##waspglm2_no_G0
+```{r Loading wasp models, include=FALSE}
+load('Wasp TPC models/WaspModel') ##waspglm2_poly
+load('Wasp TPC models/WaspModel_NoG0') ##waspglm2_no_G0
 ```
 
 
 # Main Model Function
 ```{r}
-
 TestExtinctionPoint <- function(seed, params, setup, PLOT=TRUE){
   
   set.seed(seed)
@@ -273,29 +267,6 @@ TestExtinctionPoint <- function(seed, params, setup, PLOT=TRUE){
     }
     
     ### Wasp temperature dependence
-    ## Wasp model fitted from data gives us proportion of wasps attacked (ranging from 0-1)
-    ## Most direct way to build that is just to scale the 'wasp_a' rate parameter by this
-    ## not perfect, but should capture response dynamics
-    # 
-    # if(setup$transgenerational_wasp){
-    #   w_att_temp = params$wasp_a * predict(waspglm2_poly,
-    #                                        newdata = data.frame(G0 = G0_temp,
-    #                                                             G1 = temp) ,
-    #                                        type='response' )
-    #   #with transgenerational effects and without  
-    # }else{
-    #   w_att_temp = params$wasp_a * predict(waspglm2_noG0,
-    #                                        newdata = data.frame(G1 = temp) ,
-    #                                        type='response' ) 
-    #   ## alternative no-trans effect
-    #         # w_att_temp = params$wasp_a * predict(waspglm2_poly,
-    #         #                                newdata =data.frame(G0 = temp,
-    #         #                                                     G1 = temp),
-    #         #                                type='response' ) 
-    #   }
-    # 
-    
-    
     w_att_temp_WITHTRANS = params$wasp_a * predict(waspglm2_poly,
                                                    newdata = data.frame(G0 = G0_temp,
                                                                         G1 = temp) ,
@@ -358,12 +329,13 @@ TestExtinctionPoint <- function(seed, params, setup, PLOT=TRUE){
 
 
 # Simulation runs
-```{R}
+```{r, include=FALSE}
 NUM_REPS = 100
 ```
 
-# No autocorrelation
-```{r}
+```{r Without AC, eval=FALSE, include=FALSE}
+## Without autocorrelation
+
 set.seed(1)
 
 setup$AutoCorrelated<-FALSE
@@ -389,15 +361,15 @@ setup$transgenerational_wasp<-FALSE
 Extinctions_NoAuto_NoTrans <- map_int(.x = 1:NUM_REPS, .f =  TestExtinctionPoint,
                        params = params, setup=setup, PLOT=FALSE)
 
-
-mean(Extinctions_NoAuto_BothTrans)
-mean(Extinctions_NoAuto_FlyTrans)
-mean(Extinctions_NoAuto_WaspTrans)
-mean(Extinctions_NoAuto_NoTrans)
+save(Extinctions_NoAuto_BothTrans, file="Time to Extinction/Extinctions_NoAuto_BothTrans")
+save(Extinctions_NoAuto_FlyTrans, file="Time to Extinction/Extinctions_NoAuto_FlyTrans")
+save(Extinctions_NoAuto_WaspTrans, file="Time to Extinction/Extinctions_NoAuto_WaspTrans")
+save(Extinctions_NoAuto_NoTrans, file="Time to Extinction/Extinctions_NoAuto_NoTrans")
 ```
 
-# With autocorrelation
-```{r}
+```{r With AC, eval=FALSE, include=FALSE}
+## With autocorrelation
+
 set.seed(1)
 
 setup$AutoCorrelated<-TRUE
@@ -423,14 +395,28 @@ setup$transgenerational_wasp<-FALSE
 Extinctions_Auto_NoTrans <- map_int(.x = 1:NUM_REPS, .f =  TestExtinctionPoint,
                        params = params, setup=setup, PLOT=FALSE)
 
-mean(Extinctions_Auto_BothTrans)
-mean(Extinctions_Auto_FlyTrans)
-mean(Extinctions_Auto_WaspTrans)
-mean(Extinctions_Auto_NoTrans)
+save(Extinctions_Auto_BothTrans, file="Time to Extinction/Extinctions_Auto_BothTrans")
+save(Extinctions_Auto_FlyTrans, file="Time to Extinction/Extinctions_Auto_FlyTrans")
+save(Extinctions_Auto_WaspTrans, file="Time to Extinction/Extinctions_Auto_WaspTrans")
+save(Extinctions_Auto_NoTrans, file="Time to Extinction/Extinctions_Auto_NoTrans")
+
 ```
 
-# Combining
-```{r}
+
+```{r, echo=FALSE}
+load('Time to Extinction/Extinctions_NoAuto_BothTrans')
+load('Time to Extinction/Extinctions_NoAuto_FlyTrans')
+load('Time to Extinction/Extinctions_NoAuto_WaspTrans')
+load('Time to Extinction/Extinctions_NoAuto_NoTrans')
+
+load('Time to Extinction/Extinctions_Auto_BothTrans')
+load('Time to Extinction/Extinctions_Auto_FlyTrans')
+load('Time to Extinction/Extinctions_Auto_WaspTrans')
+load('Time to Extinction/Extinctions_Auto_NoTrans')
+```
+
+
+```{r Creating extinction df, echo=FALSE}
 data.frame(Extinctions_NoAuto_BothTrans,
            Extinctions_NoAuto_NoTrans ,
            Extinctions_Auto_BothTrans,
@@ -439,14 +425,11 @@ data.frame(Extinctions_NoAuto_BothTrans,
   pivot_longer(cols= -TrialID,
                names_to = 'Name', values_to = 'Extinctions') %>%
   separate(Name, into = c('Ex', 'AC', 'TransGen')) -> LongFormExtData
-
-
-LongFormExtData
 ```
 
 
-# Geometric mean table of results
-```{r}
+## Geometric mean table of results
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 library(psych)
 
 modelling_results_2 <- matrix(
@@ -466,8 +449,10 @@ rownames(modelling_results_2) <- c("No transgenerational effects", "Wasp transge
                                  "Fly transgenerational effects", "Both transgenerational effects")
 colnames(modelling_results_2) <- c("Autocorrelation", "No autocorrelation")
 
-print(modelling_results_2)
+modelling_results_2
+```
 
+```{r, echo=FALSE}
 write.csv(modelling_results_2, "Mean time to extinction (generations).csv")
 ```
 

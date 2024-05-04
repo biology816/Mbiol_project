@@ -1,0 +1,90 @@
+---
+title: "Australian temp data"
+output: html_document
+date: "2024-02-15"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tseries)
+```
+
+```{r}
+Min_temp_data <- read.csv("IDCJAC0011_031083_1800_DAILYMIN/IDCJAC0011_031083_1800_Data.csv")  
+Max_temp_data <- read.csv("IDCJAC0010_031083_1800_DAILYMAX/IDCJAC0010_031083_1800_Data.csv")
+```
+
+```{r}
+MinMax_df <- full_join(Min_temp_data, Max_temp_data,
+                     by = join_by(Bureau.of.Meteorology.station.number, Year, Month, Day)) %>% 
+  mutate(Date = ymd(paste(Year, Month, Day))) # this makes a date object
+
+nrow(MinMax_df)/14 ## to calculate 2-weekly intervals 
+
+start = min(MinMax_df$Date)
+
+Period <- MinMax_df %>%
+  mutate(DaysSinceStart =  Date-start) %>% 
+  mutate(Period_ID = as.numeric(DaysSinceStart) %/% 14) %>%  ## %/% divides left operand by right operand, with answer rounded to nearest integer
+  group_by(Period_ID) 
+
+Averages <- Period %>%
+  summarise(Av_Mid_Temp = mean((Maximum.temperature..Degree.C.+
+                                Minimum.temperature..Degree.C.)/2, na.rm=TRUE), 
+                                Start.Date = min(Date))
+
+Averages %>%
+  mutate(Year = year(Start.Date)) %>%
+  ggplot(aes(x = Start.Date, y = Av_Mid_Temp))+
+  geom_point()+
+  geom_line()+
+  geom_smooth()+
+  facet_wrap(~Year, scales = 'free_x')
+
+sd(Averages$Av_Mid_Temp)
+
+acf(Averages$Av_Mid_Temp) %>% print
+
+
+## From here you should be able to use group_by() and summarise() to get the means in each period we were after
+
+```
+
+```{r}
+sd(MinMax_df$Maximum.temperature..Degree.C., na.rm=TRUE)
+mean(MinMax_df$Maximum.temperature..Degree.C., na.rm=TRUE)
+
+# filter months 12, 1, 2 = Dec, Jan, Feb = summer - as when highest temperatures and we're looking at effects of warming
+
+Summer_data <- filter(Period, Month == "1" | Month == "2" | Month =="12")
+
+
+Summer_period <- Summer_data %>%
+  mutate(DaysSinceStart =  Date-start) %>% 
+  mutate(Period_ID = as.numeric(DaysSinceStart) %/% 14) %>%  ## %/% divides left operand by right operand, with answer rounded to nearest integer
+  group_by(Period_ID) 
+
+Summer_averages <- Summer_period %>%
+  summarise(Av_Mid_Temp = mean((Maximum.temperature..Degree.C.+
+                                Minimum.temperature..Degree.C.)/2, na.rm=TRUE), 
+                                Start.Date = min(Date))
+
+sd(Summer_averages$Av_Mid_Temp)
+mean(Summer_averages$Av_Mid_Temp)
+mean(Summer_data$Maximum.temperature..Degree.C., na.rm=TRUE)
+sd(Summer_data$Maximum.temperature..Degree.C., na.rm=TRUE)
+
+acf(Summer_averages$Av_Mid_Temp) %>% print
+```
+
+
+
+
+

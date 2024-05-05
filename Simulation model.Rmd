@@ -10,8 +10,7 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Loading packages
-```{r}
+```{r, Loading packages, include=FALSE}
 library(tidyverse)
 library(rTPC)
 library(nls.multstart)

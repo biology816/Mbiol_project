@@ -10,20 +10,22 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#Loading packages
-```{r}
+```{r, Loading packages, include=FALSE}
 library(tidyverse)
 library(car)
 library(ggeffects)
 ```
 
-# Loading in data
+# Loading data
 ```{r}
 Fly_data <- read_csv('Fly counts.csv')
 ```
 
 # Fitting GLM - logisitic
 ```{r}
+# Binomial as either emergence or not (binary choice)
+# Binomial distribution allows for response variables that don't follow a normal distribution 
+
 Fly_data$G0 <- factor(Fly_data$G0)
 
 NoEmergence_G0 <- glm(Zero_emergence ~ G0, data=Fly_data,
@@ -41,6 +43,8 @@ NoEmergence_Int <- glm(Zero_emergence ~ G0*G1, data=Fly_data,
 AIC(NoEmergence_G0, NoEmergence_G1, NoEmergence_NoInt, NoEmergence_Int)
 
 Anova(NoEmergence_Int, test="F")
+## Interaction term is not significant
+
 Anova(NoEmergence_NoInt, test="F")
 ```
 
@@ -102,15 +106,7 @@ zero_emergence_model <- glm(Zero_emergence ~ G0_deaths+(G1+G0),
               family=binomial)
 
 Anova(zero_emergence_model,test="F")
+
+## G0_deaths does not provide significantly more information on Zero_emergence
 ```
-
-
-
-
-
-
-
-
-
-
 

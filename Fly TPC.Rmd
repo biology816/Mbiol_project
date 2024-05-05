@@ -8,8 +8,7 @@ date: "2024-05-03"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Loading packages
-```{r}
+```{r Loading packages, include=FALSE}
 library(rTPC)
 library(tidyverse)
 library(nls.multstart)
@@ -323,7 +322,7 @@ AIC(fit, fit_temp2)
 ```
 
 
-# Trying different distributions with custom function
+# Trying different distributions with custom function based on deutsch_2008 in rTPC
 
 # Poisson
 ```{r, eval=FALSE}

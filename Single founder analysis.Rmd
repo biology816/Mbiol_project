@@ -10,21 +10,23 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Loading packages
-```{r}
+```{r, Loading packages, include=FALSE}
 library(tidyverse)
 library(car)
 library(ggeffects)
 ```
 
-# Loading in data
+# Loading data
 ```{r}
 Fly_data <- read_csv('Fly counts.csv')
-Fly_data_27 <- filter(Fly_data, G0 == 27) 
 ```
 
 # Seperating out G0=27
-```{r, eval=FALSE}
+```{r}
+Fly_data_27 <- filter(Fly_data, G0 == 27) 
+```
+
+```{r, Linear model, include=FALSE}
 founder_27_mod <- lm(G0_deaths ~ G1, data=Fly_data_27)
 plot(founder_27_mod, which=2) #breaks assumptions
 plot(founder_27_mod, which=1) #breaks assumptions
@@ -43,7 +45,7 @@ Anova(G027_mod1, test="F")
 ```
 
 
-#Plotting 
+# Plotting 
 ```{r, echo=FALSE}
 predicted_probs <- ggpredict(G027_mod1, "G1")
 ggplot() +

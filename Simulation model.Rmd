@@ -124,27 +124,27 @@ plot(Topt_interp(G0_seq)~G0_seq, xlab = "G0 Temperature (°C)", ylab = "Topt", x
 points(19, 28.7833042, col="red", pch = 19)
 points(23, 28.3088035, col="red", pch = 19)
 points(27, 29.0000000, col="red", pch = 19)
-new_x_ticks <- c(19, 21, 23, 25, 27)
-new_x_labels <- c(19, 21, 23, 25, 27)
+new_x_ticks <- c(19, 21, 23, 25, 27, 29)
+new_x_labels <- c(19, 21, 23, 25, 27, 29)
 axis(side = 1, at = new_x_ticks, labels = new_x_labels)
 
 plot(Rmax_interp(G0_seq)~G0_seq, xlab = "G0 Temperature (°C)", ylab = "Rmax", xaxt = "n")
 points(19, 45.4438706, col="red", pch = 19)
 points(23, 70.8444017, col="red", pch = 19)
 points(27, 20.9152802, col="red", pch = 19)
-new_x_ticks <- c(19, 21, 23, 25, 27)
-new_x_labels <- c(19, 21, 23, 25, 27)
+new_x_ticks <- c(19, 21, 23, 25, 27, 29)
+new_x_labels <- c(19, 21, 23, 25, 27, 29)
 axis(side = 1, at = new_x_ticks, labels = new_x_labels)
 
 plot(a_interp(G0_seq)~G0_seq, xlab = "G0 Temperature (°C)", ylab = "a", xaxt = "n")
 points(19, 4.4715369, col="red", pch = 19)
 points(23, 3.6106929, col="red", pch = 19)
 points(27, 3.2001349, col="red", pch = 19)
-new_x_ticks <- c(19, 21, 23, 25, 27)
-new_x_labels <- c(19, 21, 23, 25, 27)
+new_x_ticks <- c(19, 21, 23, 25, 27, 29)
+new_x_labels <- c(19, 21, 23, 25, 27, 29)
 axis(side = 1, at = new_x_ticks, labels = new_x_labels)
 
-mtext("Fly Interpolation Functions", side = 3, line = -2, outer = TRUE, cex = 1.2)
+mtext("Fly Parameter Interpolation Functions", side = 3, line = -2, outer = TRUE, cex = 1.2)
 ```
 
 

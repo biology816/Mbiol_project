@@ -17,6 +17,8 @@ library(nls.multstart)
 library(bbmle)
 library(viridisLite)
 library(psych)
+library(lme4)
+library(car)
 ```
 
 
@@ -453,5 +455,39 @@ modelling_results_2
 
 ```{r, echo=FALSE}
 write.csv(modelling_results_2, "Mean time to extinction (generations).csv")
+```
+
+
+# Plotting
+```{r, echo=FALSE}
+LongFormExtData %>%
+  ggplot(aes(x = Extinctions)) +
+  geom_histogram(binwidth = 50, fill = "#0072B2", colour = "black") +
+  facet_wrap(~ TransGen + AC, scales = "fixed", 
+             labeller = labeller(TransGen=c("BothTrans" = "Transgenerational Effects", 
+                                            "NoTrans" = "No Transgenerational Effects"),
+                                 AC=c("Auto" = "Autocorrelation",
+                                      "NoAuto" = "No Autocorrelation"))) +
+  labs(x = "Time to extinction (generations)", y = "Frequency") +
+  ggtitle("Simulation time to extinction") +
+  theme_bw() +
+  theme(text = element_text(size = 9))
+```
+
+
+# Checking for interaction
+```{r Linear model, include=FALSE}
+## Interaction between transgenerational effects and autocorrelation
+model1 <- lm(log(Extinctions) ~ AC * TransGen, data=LongFormExtData)
+plot(model1, which=2) 
+plot(model1, which=1)
+## does not meet assumptions
+```
+
+```{r, echo=FALSE}
+memod2 <- lmer(log(Extinctions) ~ AC*TransGen +(1|TrialID), 
+               data=LongFormExtData)
+Anova(memod2, test="F")
+# no significant emergent effect of the two acting together
 ```
 
